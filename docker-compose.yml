@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.5
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - frontend
+      - backend
+      - weather
+
+  postgres:
+    image: postgres:13-alpine
+    environment:
+      POSTGRES_DB: todoapp
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - backend-network
+
+  redis:
+    image: redis:alpine
+    networks:
+      - backend-network
+
+  backend:
+    image: wachterberg/todo-backend-flask
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: todoapp
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      REDIS_HOST: redis
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - backend-network
+
+  weather:
+    image: chubin/wttr.in
+    networks:
+      - backend-network
+
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - backend
+      - weather
+    networks:
+      - backend-network
+    labels:
+      - "traefik.http.routers.frontend.rule=Host(yourdomain.com)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+
+volumes:
+  postgres-data:
+
+networks:
+  backend-network:
